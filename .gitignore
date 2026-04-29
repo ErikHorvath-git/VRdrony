@@ -1,0 +1,75 @@
+# =============================================================================
+# Unity 6 .gitignore — VRdrony
+# Based on github/gitignore Unity template + Quest/XR additions.
+# =============================================================================
+
+# --- Unity-generated ---
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Mm]emoryCaptures/
+[Uu]ser[Ss]ettings/
+
+# Recordings / Asset files Unity generates
+/[Aa]ssets/AssetStoreTools*
+/[Aa]ssets/Plugins/Editor/JetBrains*
+/[Aa]ssets/StreamingAssets/aa.meta
+/[Aa]ssets/StreamingAssets/aa/*
+
+# Auto-generated solutions / project files
+/.vs/
+/.idea/
+/.vscode/
+*.csproj
+*.unityproj
+*.sln
+*.suo
+*.tmp
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Crash reports
+sysinfo.txt
+
+# Builds
+*.apk
+*.aab
+*.unitypackage
+*.app
+
+# Crashlytics
+crashlytics-build.properties
+
+# Visual Scripting
+/[Aa]ssets/Plugins/Editor/JetBrains*
+
+# Burst / IL2CPP
+/[Aa]ssets/StreamingAssets/Library*
+/[Aa]ssets/StreamingAssets/Logs*
+
+# Meta XR caches
+/[Aa]ssets/Oculus/Cache/*
+/[Aa]ssets/XR/Loaders/
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local secrets / signing
+*.keystore
+*.jks
+*.p12
+*.aab.idsig
+keystore.properties
+local.properties
