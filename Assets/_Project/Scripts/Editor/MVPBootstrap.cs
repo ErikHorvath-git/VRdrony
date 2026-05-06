@@ -257,6 +257,17 @@ namespace DroneDefense.Editor
 
             var rangedWeapon = crossbow.GetComponent<RangedWeapon>();
 
+            // Rigidbody + collider so the gun can fall when dropped (handled
+            // by GunHoldToggle below). Starts kinematic — gun is "held"
+            // by default until the player presses grip to release it.
+            var gunRb = crossbow.AddComponent<Rigidbody>();
+            gunRb.isKinematic = true;
+            gunRb.useGravity = false;
+            gunRb.mass = 3.5f; // an AK weighs about 3.5 kg
+            var gunCol = crossbow.AddComponent<BoxCollider>();
+            gunCol.center = new Vector3(0f, 0f, 0.25f);
+            gunCol.size = new Vector3(0.08f, 0.10f, 0.85f);
+
             // Two-handed grip: aligns the gun along the grip → forend line.
             var grip = crossbow.AddComponent<TwoHandedGunGrip>();
             SerializedObject gso = new SerializedObject(grip);
@@ -270,6 +281,20 @@ namespace DroneDefense.Editor
             rso.FindProperty("leftHand").objectReferenceValue = leftHand.transform;
             rso.FindProperty("weapon").objectReferenceValue = rangedWeapon;
             rso.ApplyModifiedPropertiesWithoutUndo();
+
+            // Reload visual feedback — kicks the gun + slides charging handle.
+            var reloadAnim = crossbow.AddComponent<ReloadAnimation>();
+            SerializedObject rao = new SerializedObject(reloadAnim);
+            rao.FindProperty("reloadSource").objectReferenceValue = reload;
+            rao.ApplyModifiedPropertiesWithoutUndo();
+
+            // Grab/release: right grip button drops + picks the gun up.
+            var holdToggle = crossbow.AddComponent<GunHoldToggle>();
+            SerializedObject hto = new SerializedObject(holdToggle);
+            hto.FindProperty("rightHand").objectReferenceValue = rightHand.transform;
+            hto.FindProperty("twoHandedGrip").objectReferenceValue = grip;
+            hto.FindProperty("weapon").objectReferenceValue = rangedWeapon;
+            hto.ApplyModifiedPropertiesWithoutUndo();
 
             // Quest 3 right-trigger → Fire(); editor: Space / LMB.
             var triggerInput = crossbow.AddComponent<XRControllerWeaponInput>();
@@ -303,38 +328,56 @@ namespace DroneDefense.Editor
 
             AddTrackedPoseDriver(go, posBinding, rotBinding);
 
-            // Visual: stylised glove — palm cube + 4 finger cubes.
-            var palm = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            palm.name = "Palm";
-            palm.transform.SetParent(go.transform, worldPositionStays: false);
-            palm.transform.localPosition = Vector3.zero;
-            palm.transform.localScale = new Vector3(0.085f, 0.04f, 0.10f);
-            Tint(palm, new Color(0.95f, 0.78f, 0.62f));   // skin tone
-            Object.DestroyImmediate(palm.GetComponent<BoxCollider>());
+            // Visual: a single semi-transparent sphere. The player just
+            // needs a hint of where their controller is — this stays out
+            // of the way of the gun visual instead of clipping through it.
+            var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            sphere.name = "HandHint";
+            sphere.transform.SetParent(go.transform, worldPositionStays: false);
+            sphere.transform.localPosition = Vector3.zero;
+            sphere.transform.localScale = Vector3.one * 0.06f;
+            Object.DestroyImmediate(sphere.GetComponent<SphereCollider>());
 
-            for (int i = 0; i < 4; i++)
-            {
-                var f = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                f.name = $"Finger_{i}";
-                f.transform.SetParent(go.transform, worldPositionStays: false);
-                float xOff = (i - 1.5f) * 0.022f;
-                f.transform.localPosition = new Vector3(xOff, 0.01f, 0.07f);
-                f.transform.localScale = new Vector3(0.018f, 0.025f, 0.05f);
-                Tint(f, new Color(0.95f, 0.78f, 0.62f));
-                Object.DestroyImmediate(f.GetComponent<BoxCollider>());
-            }
-
-            // Thumb
-            var thumb = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            thumb.name = "Thumb";
-            thumb.transform.SetParent(go.transform, worldPositionStays: false);
-            thumb.transform.localPosition = new Vector3(0.05f, 0.01f, 0.02f);
-            thumb.transform.localScale = new Vector3(0.025f, 0.022f, 0.045f);
-            thumb.transform.localRotation = Quaternion.Euler(0f, -25f, 0f);
-            Tint(thumb, new Color(0.95f, 0.78f, 0.62f));
-            Object.DestroyImmediate(thumb.GetComponent<BoxCollider>());
+            var renderer = sphere.GetComponent<Renderer>();
+            renderer.sharedMaterial = GetOrCreateTransparentMat(new Color(0.95f, 0.78f, 0.62f, 0.45f));
 
             return go;
+        }
+
+        // Cached transparent URP/Lit material per RGBA. URP/Lit's transparent
+        // mode requires _Surface=1 (Transparent), _Blend=0 (Alpha), and the
+        // queue index moved into the Transparent range (3000+).
+        private static Material GetOrCreateTransparentMat(Color c)
+        {
+            EnsureFolder("Assets/_Project/Materials");
+            EnsureFolder("Assets/_Project/Materials/Generated");
+            int rk = Mathf.RoundToInt(c.r * 255f);
+            int gk = Mathf.RoundToInt(c.g * 255f);
+            int bk = Mathf.RoundToInt(c.b * 255f);
+            int ak = Mathf.RoundToInt(c.a * 255f);
+            string path = $"Assets/_Project/Materials/Generated/Trans_{rk:000}_{gk:000}_{bk:000}_{ak:000}.mat";
+
+            var existing = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (existing != null && existing.shader != null) return existing;
+
+            var urp = UrpLit;
+            if (urp == null) return null;
+
+            var mat = new Material(urp);
+            mat.SetFloat("_Surface", 1f);          // 0=Opaque, 1=Transparent
+            mat.SetFloat("_Blend", 0f);             // 0=Alpha
+            mat.SetFloat("_ZWrite", 0f);
+            mat.SetOverrideTag("RenderType", "Transparent");
+            mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.DisableKeyword("_ALPHATEST_ON");
+            if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", c);
+            else mat.color = c;
+
+            if (existing != null) { AssetDatabase.DeleteAsset(path); }
+            AssetDatabase.CreateAsset(mat, path);
+            AssetDatabase.SaveAssets();
+            return mat;
         }
 
         private static void AddTrackedPoseDriver(GameObject go, string posBinding, string rotBinding)
