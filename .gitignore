@@ -68,6 +68,9 @@ crashlytics-build.properties
 Thumbs.db
 desktop.ini
 
+# Windows artefakt z `>/dev/null` v shell skriptoch (napr. git lfs install)
+/dev/
+
 # Local secrets / signing
 *.keystore
 *.jks
