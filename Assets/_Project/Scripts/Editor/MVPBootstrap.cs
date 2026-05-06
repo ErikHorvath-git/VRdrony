@@ -225,26 +225,51 @@ namespace DroneDefense.Editor
             AddTrackedPoseDriver(camGo, "<XRHMD>/centerEyePosition", "<XRHMD>/centerEyeRotation");
 
             // ----- Hands (controllers) -----
-            // Default offsets (editor / no-VR) put the hands roughly at
-            // chest height in front of the player.
-            var leftHand  = BuildHand(camOffset.transform, "LeftHand",
-                new Vector3(-0.22f, -0.30f, 0.30f),
-                "<XRController>{LeftHand}/devicePosition",
-                "<XRController>{LeftHand}/deviceRotation");
-
+            // Default offsets (editor / no-VR) place the right hand at the
+            // pistol grip and the left hand on the forend FURTHER FORWARD,
+            // so the line right→left points roughly +Z. That way the
+            // gun (driven by TwoHandedGunGrip from this line) aims along
+            // the player's forward direction without VR poses.
+            //
+            // On Quest the TrackedPoseDriver overrides these positions
+            // with the real controller poses, so two-handed aim works
+            // automatically — just hold both controllers in line with
+            // your view.
             var rightHand = BuildHand(camOffset.transform, "RightHand",
-                new Vector3( 0.22f, -0.30f, 0.30f),
+                new Vector3( 0.15f, -0.20f, 0.25f),
                 "<XRController>{RightHand}/devicePosition",
                 "<XRController>{RightHand}/deviceRotation");
 
-            // ----- Crossbow held by RIGHT hand -----
+            var leftHand  = BuildHand(camOffset.transform, "LeftHand",
+                new Vector3( 0.08f, -0.18f, 0.55f),
+                "<XRController>{LeftHand}/devicePosition",
+                "<XRController>{LeftHand}/deviceRotation");
+
+            // ----- Gun: held with TWO HANDS (right hand on grip, left
+            // hand on forend). The gun lives as a sibling of the hands
+            // under CameraOffset, NOT a child of the right hand — that
+            // way TwoHandedGunGrip can drive its world rotation along
+            // the line from right-hand → left-hand each frame.
             var crossbow = (GameObject)PrefabUtility.InstantiatePrefab(crossbowPrefab);
-            crossbow.transform.SetParent(rightHand.transform, worldPositionStays: false);
-            // Position so the stock sits in the hand and limbs face forward.
-            crossbow.transform.localPosition = new Vector3(0f, 0.02f, 0.05f);
+            crossbow.transform.SetParent(camOffset.transform, worldPositionStays: false);
+            crossbow.transform.localPosition = new Vector3(0.22f, -0.30f, 0.30f);
             crossbow.transform.localRotation = Quaternion.identity;
 
             var rangedWeapon = crossbow.GetComponent<RangedWeapon>();
+
+            // Two-handed grip: aligns the gun along the grip → forend line.
+            var grip = crossbow.AddComponent<TwoHandedGunGrip>();
+            SerializedObject gso = new SerializedObject(grip);
+            gso.FindProperty("rightHand").objectReferenceValue = rightHand.transform;
+            gso.FindProperty("leftHand").objectReferenceValue  = leftHand.transform;
+            gso.ApplyModifiedPropertiesWithoutUndo();
+
+            // Reload by pulling the charging handle with the left hand.
+            var reload = crossbow.AddComponent<ChargingHandleReload>();
+            SerializedObject rso = new SerializedObject(reload);
+            rso.FindProperty("leftHand").objectReferenceValue = leftHand.transform;
+            rso.FindProperty("weapon").objectReferenceValue = rangedWeapon;
+            rso.ApplyModifiedPropertiesWithoutUndo();
 
             // Quest 3 right-trigger → Fire(); editor: Space / LMB.
             var triggerInput = crossbow.AddComponent<XRControllerWeaponInput>();
@@ -640,23 +665,32 @@ namespace DroneDefense.Editor
                 // Wrap an instance of the AK47 prefab in a "Crossbow" root so
                 // RangedWeapon + Muzzle live alongside the model without
                 // modifying the imported asset.
+                //
+                // Coordinate convention (GUN local space):
+                //   origin (0,0,0)     = pistol grip, where the right palm sits
+                //   +Z                 = barrel-forward (toward target)
+                //   +X                 = right side of the gun
+                //   +Y                 = up (top of receiver)
+                //
+                // We arrange the imported model so its grip lands at the root.
                 root = new GameObject("Crossbow");
 
                 var modelInstance = (GameObject)PrefabUtility.InstantiatePrefab(gunModel);
                 modelInstance.transform.SetParent(root.transform, worldPositionStays: false);
-                // Centre on the grip and orient so +Z = forward (barrel direction).
-                // The AK47 model is ~0.85m long; scale it down a bit for VR.
-                modelInstance.transform.localPosition = new Vector3(0f, -0.05f, -0.10f);
-                modelInstance.transform.localRotation = Quaternion.Euler(0f, 0f, 0f);
-                modelInstance.transform.localScale = Vector3.one * 0.6f;
+                // Shift the model BACKWARD along Z so the pistol grip sits at
+                // root origin. The AK47 stock is ~0.20m behind the grip, the
+                // barrel tip is ~0.55m forward of it. Scale 0.85 keeps the
+                // gun close to real-life proportions in VR (real AK ~0.87m).
+                modelInstance.transform.localPosition = new Vector3(0f, -0.04f, -0.20f);
+                modelInstance.transform.localRotation = Quaternion.identity;
+                modelInstance.transform.localScale = Vector3.one * 0.85f;
 
-                // Muzzle: ~front of the barrel after scaling. The AK47 is
-                // roughly 0.85m long; with 0.6 scale that's 0.51m. The
-                // grip sits about 1/3 from the back, so muzzle is ~0.34m
-                // forward of the root origin.
+                // Muzzle = barrel tip. The AK barrel sits slightly above the
+                // grip line; +0.55m forward, +0.05m up matches the visible
+                // muzzle on the AK47 model after our transform.
                 var muzzle = new GameObject("Muzzle");
                 muzzle.transform.SetParent(root.transform, worldPositionStays: false);
-                muzzle.transform.localPosition = new Vector3(0f, 0.03f, 0.34f);
+                muzzle.transform.localPosition = new Vector3(0f, 0.05f, 0.55f);
                 muzzle.transform.localRotation = Quaternion.identity;
                 muzzleTransform = muzzle.transform;
             }
