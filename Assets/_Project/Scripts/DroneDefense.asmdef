@@ -1,7 +1,9 @@
 {
     "name": "DroneDefense",
     "rootNamespace": "DroneDefense",
-    "references": [],
+    "references": [
+        "Unity.InputSystem"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

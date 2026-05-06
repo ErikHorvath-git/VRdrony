@@ -10,6 +10,7 @@
 // Pathing would be overkill for the MVP.
 
 using DroneDefense.Combat;
+using DroneDefense.Core;
 using UnityEngine;
 
 namespace DroneDefense.Enemies
@@ -29,12 +30,18 @@ namespace DroneDefense.Enemies
         [Header("Refs")]
         [SerializeField] private GameObject explosionPrefab;
 
+        [Header("Scoring")]
+        [Tooltip("If true, killing the drone with a weapon awards score. " +
+                 "Self-detonations against the tower do NOT award score.")]
+        [SerializeField] private bool awardScoreOnWeaponKill = true;
+
         private Rigidbody rb;
         private Health health;
         private Transform target;     // tower
         private Health targetHealth;
         private State state = State.Approach;
         private float spawnPhase;
+        private bool selfDetonated;   // set when EnterAttack runs
 
         public bool IsAlive => state != State.Dead && health != null && health.IsAlive;
 
@@ -98,6 +105,7 @@ namespace DroneDefense.Enemies
         private void EnterAttack()
         {
             state = State.Attack;
+            selfDetonated = true;
             if (targetHealth != null && targetHealth.IsAlive)
                 targetHealth.TakeDamage(impactDamage, transform.position, Vector3.up);
 
@@ -116,6 +124,11 @@ namespace DroneDefense.Enemies
             state = State.Dead;
             if (explosionPrefab != null)
                 Instantiate(explosionPrefab, transform.position, Quaternion.identity);
+
+            // Score only when killed by weapons (not when crashing into tower).
+            if (!selfDetonated && awardScoreOnWeaponKill && ScoreManager.Instance != null)
+                ScoreManager.Instance.RegisterKill(transform.position);
+
             Destroy(gameObject);
         }
     }

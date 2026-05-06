@@ -12,6 +12,8 @@
 [Ll]ogs/
 [Mm]emoryCaptures/
 [Uu]ser[Ss]ettings/
+.utmp/
+*_BurstDebugInformation_DoNotShip/
 
 # Recordings / Asset files Unity generates
 /[Aa]ssets/AssetStoreTools*

@@ -17,6 +17,10 @@ namespace DroneDefense.UI
                 target = Camera.main.transform;
             }
 
+            // Empirically: TextMesh in 3D reads correctly when the local +Z
+            // axis points AWAY from the camera (the text is rendered on the
+            // -Z side relative to local origin). So we set forward to
+            // (self - camera).
             Vector3 dir = transform.position - target.position;
             dir.y = 0f;
             if (dir.sqrMagnitude < 0.0001f) return;
