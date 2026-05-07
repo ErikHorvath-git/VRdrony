@@ -71,6 +71,13 @@ desktop.ini
 # Windows artefakt z `>/dev/null` v shell skriptoch (napr. git lfs install)
 /dev/
 
+# Claude Code interný adresár (worktrees a session data)
+/.claude/
+
+# Unity scene auto-recovery cache
+/[Aa]ssets/_[Rr]ecovery/
+/[Aa]ssets/_[Rr]ecovery.meta
+
 # Local secrets / signing
 *.keystore
 *.jks

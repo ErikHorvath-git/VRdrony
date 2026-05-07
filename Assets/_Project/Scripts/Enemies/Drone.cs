@@ -49,6 +49,11 @@ namespace DroneDefense.Enemies
         {
             target = towerTransform;
             targetHealth = towerHealth;
+            // Forward target to optional ranged-attack module on the same
+            // GameObject so kamikaze drones can soften the player up with
+            // periodic potshots.
+            var shooter = GetComponent<DroneShooter>();
+            if (shooter != null) shooter.Initialize(towerTransform, towerHealth);
         }
 
         private void Awake()
@@ -125,11 +130,53 @@ namespace DroneDefense.Enemies
             if (explosionPrefab != null)
                 Instantiate(explosionPrefab, transform.position, Quaternion.identity);
 
+            SpawnDebris();
+
             // Score only when killed by weapons (not when crashing into tower).
             if (!selfDetonated && awardScoreOnWeaponKill && ScoreManager.Instance != null)
                 ScoreManager.Instance.RegisterKill(transform.position);
 
             Destroy(gameObject);
+        }
+
+        // Tiny cubes that fly outward as physical chunks of the dead drone.
+        // No prefab needed — we build them from primitives and let
+        // gravity + Rigidbody do the rest. Auto-cleanup after a few
+        // seconds so they don't pile up.
+        private void SpawnDebris()
+        {
+            const int chunks = 6;
+            for (int i = 0; i < chunks; i++)
+            {
+                var d = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                d.name = "DroneDebris";
+                d.transform.position = transform.position + Random.insideUnitSphere * 0.12f;
+                d.transform.rotation = Random.rotation;
+                d.transform.localScale = new Vector3(
+                    Random.Range(0.05f, 0.10f),
+                    Random.Range(0.04f, 0.08f),
+                    Random.Range(0.05f, 0.12f));
+
+                // Match the drone's dark colour so it reads as drone parts.
+                var rend = d.GetComponent<Renderer>();
+                if (rend != null && rend.sharedMaterial != null)
+                {
+                    var mat = new Material(rend.sharedMaterial);
+                    if (mat.HasProperty("_BaseColor")) mat.SetColor("_BaseColor", new Color(0.18f, 0.18f, 0.20f));
+                    else mat.color = new Color(0.18f, 0.18f, 0.20f);
+                    rend.sharedMaterial = mat;
+                }
+
+                var rb = d.AddComponent<Rigidbody>();
+                rb.mass = 0.1f;
+                rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+                Vector3 outward = (Random.insideUnitSphere + Vector3.up * 0.4f).normalized * Random.Range(3.5f, 6.5f);
+                rb.linearVelocity = outward;
+                rb.angularVelocity = Random.insideUnitSphere * 12f;
+
+                // Don't accumulate — clean up after the chunks settle.
+                Destroy(d, 3.5f);
+            }
         }
     }
 }

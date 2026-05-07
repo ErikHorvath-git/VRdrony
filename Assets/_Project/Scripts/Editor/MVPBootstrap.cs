@@ -37,11 +37,12 @@ namespace DroneDefense.Editor
     {
         private const string GeneratedRootName = "MVP_Generated";
 
-        private const string DronePrefabPath     = "Assets/_Project/Prefabs/Drones/KamikazeDrone.prefab";
-        private const string ExplosionPrefabPath = "Assets/_Project/Prefabs/VFX/DroneExplosion.prefab";
-        private const string ArrowPrefabPath     = "Assets/_Project/Prefabs/Weapons/Arrow.prefab";
-        private const string CrossbowPrefabPath  = "Assets/_Project/Prefabs/Weapons/Crossbow.prefab";
-        private const string SwordPrefabPath     = "Assets/_Project/Prefabs/Weapons/Sword.prefab";
+        private const string DronePrefabPath          = "Assets/_Project/Prefabs/Drones/KamikazeDrone.prefab";
+        private const string ExplosionPrefabPath      = "Assets/_Project/Prefabs/VFX/DroneExplosion.prefab";
+        private const string ArrowPrefabPath          = "Assets/_Project/Prefabs/Weapons/Arrow.prefab";
+        private const string CrossbowPrefabPath       = "Assets/_Project/Prefabs/Weapons/Crossbow.prefab";
+        private const string SwordPrefabPath          = "Assets/_Project/Prefabs/Weapons/Sword.prefab";
+        private const string EnemyProjectilePrefabPath = "Assets/_Project/Prefabs/Drones/EnemyProjectile.prefab";
 
         // Gun model imported by the user (PolyOne / Free Gun pack). If
         // present, the "crossbow" is built around this model instead of
@@ -105,18 +106,30 @@ namespace DroneDefense.Editor
             var towerHealth = towerBase.AddComponent<Health>();
             towerHealth.SetMaxHealth(100f);
 
-            // ---- Spawn points (drones come from +Z, varied X/Y) -----
+            // ---- Spawn points (drones come from ALL sides) ----------
+            // Distributed around the tower so the player has to keep
+            // turning their head to scan threats — left, right, front,
+            // and from above. Heights are set so drones approach at or
+            // slightly above the player's eye level on top of the tower.
             var spawnRoot = new GameObject("DroneSpawnPoints");
             spawnRoot.transform.SetParent(root.transform);
-            var sp1 = MakeSpawn(spawnRoot.transform, "Spawn_L", new Vector3(-7f, 5f, 14f));
-            var sp2 = MakeSpawn(spawnRoot.transform, "Spawn_C", new Vector3( 0f, 6f, 16f));
-            var sp3 = MakeSpawn(spawnRoot.transform, "Spawn_R", new Vector3( 7f, 5f, 14f));
-            var sp4 = MakeSpawn(spawnRoot.transform, "Spawn_HighL", new Vector3(-4f, 7f, 18f));
-            var sp5 = MakeSpawn(spawnRoot.transform, "Spawn_HighR", new Vector3( 4f, 7f, 18f));
+            // Front (+Z)
+            var sp1 = MakeSpawn(spawnRoot.transform, "Spawn_FrontL",  new Vector3(-7f,  7f,  14f));
+            var sp2 = MakeSpawn(spawnRoot.transform, "Spawn_FrontC",  new Vector3( 0f,  8f,  16f));
+            var sp3 = MakeSpawn(spawnRoot.transform, "Spawn_FrontR",  new Vector3( 7f,  7f,  14f));
+            // High front
+            var sp4 = MakeSpawn(spawnRoot.transform, "Spawn_HighL",   new Vector3(-4f, 11f,  18f));
+            var sp5 = MakeSpawn(spawnRoot.transform, "Spawn_HighR",   new Vector3( 4f, 11f,  18f));
+            // Sides — drones strafe in from left and right of the tower
+            var sp6 = MakeSpawn(spawnRoot.transform, "Spawn_SideL",   new Vector3(-15f, 7f,  -3f));
+            var sp7 = MakeSpawn(spawnRoot.transform, "Spawn_SideR",   new Vector3( 15f, 7f,  -3f));
+            var sp8 = MakeSpawn(spawnRoot.transform, "Spawn_SideHighL", new Vector3(-12f, 10f, 4f));
+            var sp9 = MakeSpawn(spawnRoot.transform, "Spawn_SideHighR", new Vector3( 12f, 10f, 4f));
 
             // ---- Prefabs --------------------------------------------
             GameObject explosionPrefab = BuildOrUpdateExplosionPrefab();
-            Drone dronePrefab = BuildOrUpdateDronePrefab(explosionPrefab);
+            GameObject enemyProjectilePrefab = BuildOrUpdateEnemyProjectilePrefab();
+            Drone dronePrefab = BuildOrUpdateDronePrefab(explosionPrefab, enemyProjectilePrefab);
             Projectile arrowPrefab = BuildOrUpdateArrowPrefab();
             GameObject crossbowPrefab = BuildOrUpdateCrossbowPrefab(arrowPrefab);
             GameObject swordPrefab = BuildOrUpdateSwordPrefab();
@@ -134,7 +147,16 @@ namespace DroneDefense.Editor
             so.FindProperty("towerHealth").objectReferenceValue = towerHealth;
             so.ApplyModifiedPropertiesWithoutUndo();
 
+            // ---- Player rig FIRST so drones know where the player is ----
+            Transform playerRigT = BuildPlayerRig(root.transform, crossbowPrefab, swordPrefab);
+            Debug.Log("[MVP] Player rig built on top of tower. Quest: head + hands tracked, right trigger fires. Editor: mouse-look + LMB/Space.");
+
             // ---- WaveSpawner ----------------------------------------
+            // target = PlayerRig (not the camera). The rig is anchored on
+            // top of the tower and does NOT move when the player turns
+            // their head — drones therefore can't be 'shaken off' by
+            // tilting the headset. targetHealth = tower so impact damage
+            // still flows to the thing being defended.
             var spawnerGo = new GameObject("WaveSpawner");
             spawnerGo.transform.SetParent(root.transform);
             var spawner = spawnerGo.AddComponent<WaveSpawner>();
@@ -142,25 +164,19 @@ namespace DroneDefense.Editor
             sso.FindProperty("gameManager").objectReferenceValue = gm;
             sso.FindProperty("dronePrefab").objectReferenceValue = dronePrefab;
             var spArr = sso.FindProperty("spawnPoints");
-            spArr.arraySize = 5;
+            spArr.arraySize = 9;
             spArr.GetArrayElementAtIndex(0).objectReferenceValue = sp1.transform;
             spArr.GetArrayElementAtIndex(1).objectReferenceValue = sp2.transform;
             spArr.GetArrayElementAtIndex(2).objectReferenceValue = sp3.transform;
             spArr.GetArrayElementAtIndex(3).objectReferenceValue = sp4.transform;
             spArr.GetArrayElementAtIndex(4).objectReferenceValue = sp5.transform;
-            sso.FindProperty("target").objectReferenceValue = towerBase.transform;
+            spArr.GetArrayElementAtIndex(5).objectReferenceValue = sp6.transform;
+            spArr.GetArrayElementAtIndex(6).objectReferenceValue = sp7.transform;
+            spArr.GetArrayElementAtIndex(7).objectReferenceValue = sp8.transform;
+            spArr.GetArrayElementAtIndex(8).objectReferenceValue = sp9.transform;
+            sso.FindProperty("target").objectReferenceValue = playerRigT != null ? (Object)playerRigT : towerBase.transform;
             sso.FindProperty("targetHealth").objectReferenceValue = towerHealth;
             sso.ApplyModifiedPropertiesWithoutUndo();
-
-            // ---- Player rig (works in editor AND on Quest 3) ---------
-            // We build our own programmatic rig with Camera + LeftHand +
-            // RightHand controllers driven by InputSystem TrackedPoseDriver.
-            // In editor without an active XR session, the pose actions stay
-            // at zero and the rig falls back to mouse-look (SimpleFPSController).
-            // On Quest 3, HMD/controller poses drive head + hand transforms.
-            BuildPlayerRig(root.transform, crossbowPrefab, swordPrefab);
-            Debug.Log("[MVP] Player rig built on top of tower (Camera + LeftHand + RightHand). " +
-                      "Editor: mouse-look + LMB/Space fires. Quest 3: head + hands tracked, right trigger fires.");
 
             // ---- World-space dashboard ------------------------------
             BuildDashboard(root.transform, towerHealth, spawner);
@@ -195,7 +211,7 @@ namespace DroneDefense.Editor
         //
         // On Quest 3: HMD pose drives camera, controller poses drive
         // hand transforms, controller trigger fires the crossbow.
-        private static void BuildPlayerRig(Transform parent, GameObject crossbowPrefab, GameObject swordPrefab)
+        private static Transform BuildPlayerRig(Transform parent, GameObject crossbowPrefab, GameObject swordPrefab)
         {
             // Disable any pre-existing scene "Main Camera" so we don't get
             // duplicate AudioListeners or competing cameras.
@@ -207,16 +223,25 @@ namespace DroneDefense.Editor
             rig.transform.position = new Vector3(TowerCenter.x, TowerCenter.y + TowerHeight * 0.5f, TowerCenter.z);
             rig.transform.rotation = Quaternion.identity;
 
-            // CameraOffset lifts everything up to standing eye height. The
-            // "Floor" tracking origin returns absolute floor-relative poses,
-            // so without the offset the user would be at ground level.
+            // CameraOffset is a tracking-origin anchor. With Floor tracking
+            // mode the HMD pose ALREADY includes the user's standing height
+            // (~1.6 m), so we MUST keep camOffset at the rig position
+            // (localPos = 0). Adding another 1.6 m here would stack on top
+            // of the headset height and put the player two metres above the
+            // tower (the bug user reported as 'som moc vysoko, mám byť na
+            // veži'). Editor mouse-look fallback gets eye height applied
+            // separately by SimpleFPSController.
             var camOffset = new GameObject("CameraOffset");
             camOffset.transform.SetParent(rig.transform, worldPositionStays: false);
-            camOffset.transform.localPosition = new Vector3(0f, PlayerEyeHeight, 0f);
+            camOffset.transform.localPosition = Vector3.zero;
 
             // ----- Camera (head) -----
             var camGo = new GameObject("PlayerCamera");
             camGo.transform.SetParent(camOffset.transform, worldPositionStays: false);
+            // Editor-only fallback eye height. On Quest the TrackedPoseDriver
+            // overwrites this every frame with the real HMD pose (which is
+            // floor-relative and already includes standing height).
+            camGo.transform.localPosition = new Vector3(0f, PlayerEyeHeight, 0f);
             var cam = camGo.AddComponent<Camera>();
             cam.fieldOfView = 75f;
             cam.nearClipPlane = 0.05f;
@@ -225,25 +250,28 @@ namespace DroneDefense.Editor
             AddTrackedPoseDriver(camGo, "<XRHMD>/centerEyePosition", "<XRHMD>/centerEyeRotation");
 
             // ----- Hands (controllers) -----
-            // Default offsets (editor / no-VR) place the right hand at the
-            // pistol grip and the left hand on the forend FURTHER FORWARD,
-            // so the line right→left points roughly +Z. That way the
-            // gun (driven by TwoHandedGunGrip from this line) aims along
-            // the player's forward direction without VR poses.
+            // Default offsets place RIGHT hand at the BACK (pistol grip,
+            // closer to the player) and LEFT hand IN FRONT (forend, the
+            // support hand that points the barrel toward the target).
+            // The gun is then driven by TwoHandedGunGrip along the line
+            // FROM right hand TO left hand → barrel points where the
+            // left hand is steering it.
             //
             // On Quest the TrackedPoseDriver overrides these positions
-            // with the real controller poses, so two-handed aim works
-            // automatically — just hold both controllers in line with
-            // your view.
+            // with the real controller poses each frame.
             var rightHand = BuildHand(camOffset.transform, "RightHand",
-                new Vector3( 0.15f, -0.20f, 0.25f),
+                new Vector3( 0.18f, -0.22f, 0.18f),  // back: closer to chest
                 "<XRController>{RightHand}/devicePosition",
                 "<XRController>{RightHand}/deviceRotation");
 
             var leftHand  = BuildHand(camOffset.transform, "LeftHand",
-                new Vector3( 0.08f, -0.18f, 0.55f),
+                new Vector3( 0.05f, -0.18f, 0.65f),  // front: extended forward
                 "<XRController>{LeftHand}/devicePosition",
                 "<XRController>{LeftHand}/deviceRotation");
+
+            // Round shield strapped to the left hand. Drone projectiles
+            // that hit it are destroyed — protects the player.
+            BuildShieldOn(leftHand.transform);
 
             // ----- Gun: held with TWO HANDS (right hand on grip, left
             // hand on forend). The gun lives as a sibling of the hands
@@ -257,22 +285,20 @@ namespace DroneDefense.Editor
 
             var rangedWeapon = crossbow.GetComponent<RangedWeapon>();
 
-            // Rigidbody + collider so the gun can fall when dropped (handled
-            // by GunHoldToggle below). Starts kinematic — gun is "held"
-            // by default until the player presses grip to release it.
-            var gunRb = crossbow.AddComponent<Rigidbody>();
-            gunRb.isKinematic = true;
-            gunRb.useGravity = false;
-            gunRb.mass = 3.5f; // an AK weighs about 3.5 kg
-            var gunCol = crossbow.AddComponent<BoxCollider>();
-            gunCol.center = new Vector3(0f, 0f, 0.25f);
-            gunCol.size = new Vector3(0.08f, 0.10f, 0.85f);
+            // (HitscanWeapon was wired here for an experimental
+            // raycast-from-camera mode. Removed because the user prefers
+            // the original ballistic Arrow behaviour.)
+            HitscanWeapon hitscan = null;
 
-            // Two-handed grip: aligns the gun along the grip → forend line.
+            // SINGLE-HAND grip: the crossbow follows the right controller's
+            // position AND rotation. Aim is wherever the right controller
+            // is pointing. Left hand is purely visual support — no aim
+            // influence. Simple, predictable, hard to break.
             var grip = crossbow.AddComponent<TwoHandedGunGrip>();
             SerializedObject gso = new SerializedObject(grip);
             gso.FindProperty("rightHand").objectReferenceValue = rightHand.transform;
             gso.FindProperty("leftHand").objectReferenceValue  = leftHand.transform;
+            gso.FindProperty("useSupportHandToAim").boolValue = false;
             gso.ApplyModifiedPropertiesWithoutUndo();
 
             // Reload by pulling the charging handle with the left hand.
@@ -288,18 +314,13 @@ namespace DroneDefense.Editor
             rao.FindProperty("reloadSource").objectReferenceValue = reload;
             rao.ApplyModifiedPropertiesWithoutUndo();
 
-            // Grab/release: right grip button drops + picks the gun up.
-            var holdToggle = crossbow.AddComponent<GunHoldToggle>();
-            SerializedObject hto = new SerializedObject(holdToggle);
-            hto.FindProperty("rightHand").objectReferenceValue = rightHand.transform;
-            hto.FindProperty("twoHandedGrip").objectReferenceValue = grip;
-            hto.FindProperty("weapon").objectReferenceValue = rangedWeapon;
-            hto.ApplyModifiedPropertiesWithoutUndo();
-
-            // Quest 3 right-trigger → Fire(); editor: Space / LMB.
+            // Quest right-trigger → Fire(); editor: Space / LMB.
+            // Wires both the ballistic crossbow AND the hitscan; the
+            // input prefers hitscan when both are set.
             var triggerInput = crossbow.AddComponent<XRControllerWeaponInput>();
             SerializedObject tio = new SerializedObject(triggerInput);
             tio.FindProperty("weapon").objectReferenceValue = rangedWeapon;
+            tio.FindProperty("hitscan").objectReferenceValue = hitscan;
             tio.FindProperty("hand").enumValueIndex = (int)XRControllerWeaponInput.Hand.Right;
             tio.ApplyModifiedPropertiesWithoutUndo();
 
@@ -316,6 +337,64 @@ namespace DroneDefense.Editor
             sob.FindProperty("pitchPivot").objectReferenceValue = camGo.transform;
             sob.FindProperty("rangedWeapon").objectReferenceValue = rangedWeapon;
             sob.ApplyModifiedPropertiesWithoutUndo();
+
+            // Create a stable PLAYER TARGET anchored at eye level under
+            // the rig. WaveSpawner aims drones at this transform — they
+            // converge on the player's chest/head altitude (y ≈ 6.6) on
+            // top of the tower instead of diving for the tower base.
+            // Crucially, this is NOT a child of the camera, so it doesn't
+            // move when the player turns their head.
+            var playerTarget = new GameObject("PlayerTarget");
+            playerTarget.transform.SetParent(rig.transform, worldPositionStays: false);
+            playerTarget.transform.localPosition = new Vector3(0f, PlayerEyeHeight, 0f);
+
+            return playerTarget.transform;
+        }
+
+        // Round shield: a flat cylinder parented to the left hand, with a
+        // grip handle on the back. Has a non-trigger collider so drone
+        // projectiles destroy themselves on contact (see EnemyProjectile).
+        private static void BuildShieldOn(Transform leftHandTransform)
+        {
+            var shieldRoot = new GameObject("Shield");
+            shieldRoot.transform.SetParent(leftHandTransform, worldPositionStays: false);
+            // Slightly forward of the palm so it intercepts incoming fire.
+            shieldRoot.transform.localPosition = new Vector3(0f, 0f, 0.10f);
+            shieldRoot.transform.localRotation = Quaternion.Euler(90f, 0f, 0f); // face the player's view direction
+
+            // Disc body (cylinder squashed flat).
+            var disc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            disc.name = "Disc";
+            disc.transform.SetParent(shieldRoot.transform, worldPositionStays: false);
+            disc.transform.localPosition = Vector3.zero;
+            disc.transform.localScale = new Vector3(0.45f, 0.025f, 0.45f);
+            Tint(disc, new Color(0.55f, 0.4f, 0.18f));   // brushed-bronze tone
+
+            // Rim (slightly larger flat ring) — visual only.
+            var rim = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            rim.name = "Rim";
+            rim.transform.SetParent(shieldRoot.transform, worldPositionStays: false);
+            rim.transform.localPosition = Vector3.zero;
+            rim.transform.localScale = new Vector3(0.50f, 0.018f, 0.50f);
+            Tint(rim, new Color(0.30f, 0.22f, 0.10f));
+            // Strip the auto collider from the rim — only the disc collides.
+            Object.DestroyImmediate(rim.GetComponent<CapsuleCollider>());
+
+            // Boss / centre stud — pure decoration.
+            var boss = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            boss.name = "Boss";
+            boss.transform.SetParent(shieldRoot.transform, worldPositionStays: false);
+            boss.transform.localPosition = new Vector3(0f, 0.04f, 0f);
+            boss.transform.localScale = Vector3.one * 0.12f;
+            Tint(boss, new Color(0.85f, 0.7f, 0.25f));
+            Object.DestroyImmediate(boss.GetComponent<SphereCollider>());
+
+            // Make sure the disc collider is a non-trigger so projectile
+            // OnCollisionEnter fires.
+            var col = disc.GetComponent<CapsuleCollider>();
+            if (col != null) col.isTrigger = false;
+
+            shieldRoot.AddComponent<DroneDefense.Enemies.Shield>();
         }
 
         private static GameObject BuildHand(Transform parent, string name, Vector3 fallbackOffset,
@@ -513,7 +592,7 @@ namespace DroneDefense.Editor
         }
 
         // -------------------------------------------------------------
-        private static Drone BuildOrUpdateDronePrefab(GameObject explosionPrefab)
+        private static Drone BuildOrUpdateDronePrefab(GameObject explosionPrefab, GameObject enemyProjectilePrefab = null)
         {
             var temp = new GameObject("KamikazeDrone");
             var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -558,6 +637,17 @@ namespace DroneDefense.Editor
             dso.FindProperty("explosionPrefab").objectReferenceValue = explosionPrefab;
             dso.ApplyModifiedPropertiesWithoutUndo();
 
+            // Optional ranged-attack module — drone will periodically
+            // spawn EnemyProjectiles aimed at the player. Player blocks
+            // them with the left-hand Shield.
+            if (enemyProjectilePrefab != null)
+            {
+                var shooter = temp.AddComponent<DroneShooter>();
+                SerializedObject ssoShooter = new SerializedObject(shooter);
+                ssoShooter.FindProperty("projectilePrefab").objectReferenceValue = enemyProjectilePrefab;
+                ssoShooter.ApplyModifiedPropertiesWithoutUndo();
+            }
+
             foreach (var c in temp.GetComponentsInChildren<BoxCollider>())
                 Object.DestroyImmediate(c);
             foreach (var c in temp.GetComponentsInChildren<SphereCollider>())
@@ -576,23 +666,28 @@ namespace DroneDefense.Editor
             var ps = temp.AddComponent<ParticleSystem>();
 
             var main = ps.main;
-            main.duration = 0.45f;
+            main.duration = 0.6f;
             main.loop = false;
-            main.startLifetime = 0.6f;
-            main.startSpeed = 5f;
-            main.startSize = 0.18f;
+            main.startLifetime = 1.0f;
+            main.startSpeed = 9f;
+            main.startSize = 0.32f;
             main.startColor = new ParticleSystem.MinMaxGradient(
-                new Color(1f, 0.6f, 0.1f), new Color(1f, 0.25f, 0.05f));
-            main.gravityModifier = 0.4f;
-            main.maxParticles = 60;
+                new Color(1f, 0.7f, 0.15f), new Color(1f, 0.3f, 0.05f));
+            main.gravityModifier = 0.6f;
+            main.maxParticles = 200;
 
             var emission = ps.emission;
-            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 36) });
+            // Bigger primary burst + a secondary delayed burst so the cloud
+            // looks like a real two-stage detonation, not a single puff.
+            emission.SetBursts(new[] {
+                new ParticleSystem.Burst(0f,    100),
+                new ParticleSystem.Burst(0.08f, 50),
+            });
             emission.rateOverTime = 0;
 
             var shape = ps.shape;
             shape.shapeType = ParticleSystemShapeType.Sphere;
-            shape.radius = 0.05f;
+            shape.radius = 0.10f;
 
             var color = ps.colorOverLifetime;
             color.enabled = true;
@@ -613,8 +708,9 @@ namespace DroneDefense.Editor
             var size = ps.sizeOverLifetime;
             size.enabled = true;
             var sCurve = new AnimationCurve(
-                new Keyframe(0f, 1f),
-                new Keyframe(1f, 0.2f));
+                new Keyframe(0f, 0.6f),
+                new Keyframe(0.3f, 1.4f),  // expand outward
+                new Keyframe(1f, 0.1f));   // dissipate
             size.size = new ParticleSystem.MinMaxCurve(1f, sCurve);
 
             var renderer = temp.GetComponent<ParticleSystemRenderer>();
@@ -649,6 +745,36 @@ namespace DroneDefense.Editor
             // Particle material is already an asset (saved above) — no need to call
             // SaveTempMaterialsAsAssets here, but it's idempotent if we did.
             var prefab = PrefabUtility.SaveAsPrefabAssetAndConnect(temp, ExplosionPrefabPath, InteractionMode.AutomatedAction);
+            Object.DestroyImmediate(temp);
+            return prefab;
+        }
+
+        // -------------------------------------------------------------
+        // Glowing-orange sphere fired BY drones at the player. Lacks
+        // gravity, slow enough to be dodgeable, blocked by the Shield.
+        private static GameObject BuildOrUpdateEnemyProjectilePrefab()
+        {
+            EnsureFolder("Assets/_Project/Prefabs/Drones");
+
+            var temp = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            temp.name = "EnemyProjectile";
+            temp.transform.localScale = Vector3.one * 0.18f;
+            Tint(temp, new Color(1f, 0.55f, 0.1f));
+
+            var rb = temp.AddComponent<Rigidbody>();
+            rb.useGravity = false;
+            rb.mass = 0.05f;
+            rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
+
+            // Sphere primitive already has a SphereCollider — keep it as
+            // a non-trigger collider so OnCollisionEnter fires.
+            var col = temp.GetComponent<SphereCollider>();
+            col.isTrigger = false;
+
+            temp.AddComponent<EnemyProjectile>();
+
+            SaveTempMaterialsAsAssets(temp);
+            var prefab = PrefabUtility.SaveAsPrefabAssetAndConnect(temp, EnemyProjectilePrefabPath, InteractionMode.AutomatedAction);
             Object.DestroyImmediate(temp);
             return prefab;
         }
@@ -702,7 +828,11 @@ namespace DroneDefense.Editor
             GameObject root;
             Transform muzzleTransform;
 
-            var gunModel = AssetDatabase.LoadAssetAtPath<GameObject>(GunModelPrefabPath);
+            // User asked to drop the PolyOne AK47 wrap and go back to the
+            // procedural cube crossbow that was reliably firing arrows.
+            // Set USE_AK47 = true (and rebuild) to re-enable.
+            const bool USE_AK47 = false;
+            var gunModel = USE_AK47 ? AssetDatabase.LoadAssetAtPath<GameObject>(GunModelPrefabPath) : null;
             if (gunModel != null)
             {
                 // Wrap an instance of the AK47 prefab in a "Crossbow" root so

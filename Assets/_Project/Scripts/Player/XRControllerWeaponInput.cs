@@ -25,7 +25,11 @@ namespace DroneDefense.Player
     {
         public enum Hand { Right, Left }
 
+        [Tooltip("Optional ballistic weapon (RangedWeapon spawns projectiles).")]
         [SerializeField] private RangedWeapon weapon;
+        [Tooltip("Optional hitscan weapon (instant raycast). " +
+                 "Takes priority over the ballistic weapon if both are set.")]
+        [SerializeField] private HitscanWeapon hitscan;
         [SerializeField] private Hand hand = Hand.Right;
         [Tooltip("Optional override binding path. If set, used instead of the default Right/Left trigger binding.")]
         [SerializeField] private string bindingPathOverride = "";
@@ -34,17 +38,32 @@ namespace DroneDefense.Player
 
         private void OnEnable()
         {
-            string path = !string.IsNullOrEmpty(bindingPathOverride)
-                ? bindingPathOverride
-                : (hand == Hand.Right
-                    ? "<XRController>{RightHand}/triggerPressed"
-                    : "<XRController>{LeftHand}/triggerPressed");
+            string handTag = hand == Hand.Right ? "RightHand" : "LeftHand";
 
-            triggerAction = new InputAction(name: "Fire", type: InputActionType.Button, binding: path);
-            // Fall-back bindings so the action also fires from the XR Device
-            // Simulator's mouse/keyboard mappings and from desktop testing.
+            triggerAction = new InputAction(name: "Fire", type: InputActionType.Button);
+
+            if (!string.IsNullOrEmpty(bindingPathOverride))
+            {
+                triggerAction.AddBinding(bindingPathOverride);
+            }
+            else
+            {
+                // Quest 2 / 3 / Touch controllers report under multiple
+                // device classes depending on the OpenXR / Oculus runtime
+                // version. Bind ALL the common paths so we don't miss the
+                // trigger on any platform.
+                triggerAction.AddBinding($"<XRController>{{{handTag}}}/triggerPressed");
+                triggerAction.AddBinding($"<XRController>{{{handTag}}}/trigger");
+                triggerAction.AddBinding($"<OculusTouchController>{{{handTag}}}/triggerPressed");
+                triggerAction.AddBinding($"<OculusTouchController>{{{handTag}}}/trigger");
+                triggerAction.AddBinding($"<MetaQuestTouchPlusController>{{{handTag}}}/triggerPressed");
+                triggerAction.AddBinding($"<MetaQuestTouchProController>{{{handTag}}}/triggerPressed");
+            }
+
+            // Editor / desktop fall-backs.
             triggerAction.AddBinding("<Keyboard>/space");
             triggerAction.AddBinding("<Mouse>/leftButton");
+
             triggerAction.performed += HandleFire;
             triggerAction.Enable();
         }
@@ -60,7 +79,8 @@ namespace DroneDefense.Player
 
         private void HandleFire(InputAction.CallbackContext _)
         {
-            if (weapon != null) weapon.Fire();
+            if (hitscan != null) hitscan.Fire();
+            else if (weapon != null) weapon.Fire();
         }
     }
 }

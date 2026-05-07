@@ -283,6 +283,7 @@ GameObject:
   - component: {fileID: 8186086711533774012}
   - component: {fileID: 4740314256247758584}
   - component: {fileID: 4643274229112722489}
+  - component: {fileID: 4206157416088001949}
   m_Layer: 0
   m_Name: KamikazeDrone
   m_TagString: Untagged
@@ -398,6 +399,27 @@ MonoBehaviour:
   bobFrequency: 1.5
   explosionPrefab: {fileID: 8869489810375891317, guid: 82df2fcb6507e1a4985033199d2f8b59, type: 3}
   awardScoreOnWeaponKill: 1
+--- !u!114 &4206157416088001949
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6125644931653488359}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 35fc88c5ae04e3349a3bc0b61bc41d93, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DroneDefense::DroneDefense.Enemies.DroneShooter
+  fireInterval: 4
+  firstShotDelay: 2.5
+  jitter: 1.2
+  minRangeToFire: 4
+  maxRangeToFire: 25
+  projectilePrefab: {fileID: 8003529764992543087, guid: cee1ebb83cec27a429d9e314c7f2e09d, type: 3}
+  projectileSpeed: 8
+  projectileDamage: 8
+  projectileLifetime: 6
 --- !u!1 &6265984561323392839
 GameObject:
   m_ObjectHideFlags: 0

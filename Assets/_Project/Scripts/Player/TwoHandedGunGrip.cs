@@ -38,23 +38,32 @@ namespace DroneDefense.Player
                  "lands in the right hand.")]
         [SerializeField] private Vector3 gripLocalOffset = Vector3.zero;
 
-        [Tooltip("Minimum hand separation required to use two-handed aim. " +
-                 "Below this we fall back to right-hand-only rotation (e.g. " +
-                 "when the player is holstering or has dropped a hand).")]
-        [SerializeField] private float twoHandMinDistance = 0.15f;
+        [Tooltip("If TRUE the barrel direction is set to the line from " +
+                 "right hand → left hand whenever the support hand is far " +
+                 "enough away (twoHandMinDistance). " +
+                 "If FALSE (default for VR realism) the gun simply follows " +
+                 "the right controller's rotation — same as how shooters " +
+                 "like Onward / Population One handle aim. The left hand " +
+                 "is then purely visual support.")]
+        [SerializeField] private bool useSupportHandToAim = true;
 
-        [Tooltip("If true, snaps roll so the gun stays upright (no barrel-roll). " +
-                 "Use the right hand's up-vector to define what 'upright' is.")]
-        [SerializeField] private bool stabiliseRoll = true;
+        [Tooltip("Only used when useSupportHandToAim = true.")]
+        [SerializeField] private float twoHandMinDistance = 0.20f;
+
+        [Tooltip("If TRUE the gun is rolled so its 'up' is world up — feels " +
+                 "stable but not realistic. Disable to let the right wrist " +
+                 "control the gun's roll axis. Only used when " +
+                 "useSupportHandToAim = true.")]
+        [SerializeField] private bool stabiliseRoll = false;
 
         private void LateUpdate()
         {
             if (rightHand == null) return;
 
-            // Anchor on the right hand.
+            // Anchor on the right hand (pistol grip).
             transform.position = rightHand.position - rightHand.rotation * gripLocalOffset;
 
-            if (leftHand != null)
+            if (useSupportHandToAim && leftHand != null)
             {
                 Vector3 lineToLeft = leftHand.position - rightHand.position;
                 if (lineToLeft.magnitude >= twoHandMinDistance)
@@ -66,7 +75,8 @@ namespace DroneDefense.Player
                 }
             }
 
-            // Fallback: follow the right hand's rotation.
+            // Default: follow the right hand's rotation. The barrel points
+            // wherever the right controller is pointing — natural VR aim.
             transform.rotation = rightHand.rotation;
         }
     }
